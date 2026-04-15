@@ -679,7 +679,7 @@ wheels = [
 ]
 
 [[package]]
-name = "weather"
+name = "weather-mcp"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
