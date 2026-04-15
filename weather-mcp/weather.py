@@ -8,7 +8,7 @@ mcp = FastMCP("weather")
 
 # Constants
 NWS_API_BASE = "https://api.weather.gov"
-USER_AGENT = "weather-app/1.0 (contact@example.com)" # Added placeholder contact
+USER_AGENT = "mcp-weather/1.0 (contact@example.com)" # Added placeholder contact
 
 async def make_nws_request(url: str) -> dict[str, Any] | None:
     """Make a request to the NWS API with proper error handling."""

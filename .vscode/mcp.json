@@ -2,11 +2,19 @@
   "servers": {
     "weather": {
       "command": "uv",
+      "args": ["--directory", "./weather-mcp", "run", "weather.py"]
+    },
+    "docker-weather": {
+      "command": "sudo",
       "args": [
-        "--directory",
-        "./weather-mcp",
+        "docker",
         "run",
-        "weather.py"
+        "-i",
+        "--rm",
+        "--init",
+        "-e",
+        "DOCKER_CONTAINER=true",
+        "mcp-weather"
       ]
     }
   }
