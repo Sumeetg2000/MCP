@@ -16,6 +16,24 @@
         "DOCKER_CONTAINER=true",
         "mcp-weather"
       ]
+    },
+    "shell": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["--directory", "./shell-mcp", "run", "server.py"]
+    },
+    "docker-shell": {
+      "command": "sudo",
+      "args": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "--init",
+        "-e",
+        "DOCKER_CONTAINER=true",
+        "shellserver-app"
+      ]
     }
   }
 }
