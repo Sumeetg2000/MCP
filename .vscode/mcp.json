@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "weather": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/home/sumeet/Desktop/workspace/goals/MCP/weather",
+        "run",
+        "weather.py"
+      ]
+    }
+  }
+}
