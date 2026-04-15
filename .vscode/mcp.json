@@ -34,6 +34,9 @@
         "DOCKER_CONTAINER=true",
         "shellserver-app"
       ]
+    },
+    "research-prompt-mcp": {
+      "url":"http://127.0.0.1:8000/mcp/"
     }
   }
 }
