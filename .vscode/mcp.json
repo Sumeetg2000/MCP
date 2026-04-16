@@ -38,6 +38,14 @@
     "research-prompt-mcp": {
       "command": "uv",
       "args": ["--directory", "./research-prompt", "run", "main.py"]
+    },
+    "todos": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp-auth0-oidc.sumeet-simform.workers.dev/mcp"
+      ],
+      "env": {}
     }
   }
 }
