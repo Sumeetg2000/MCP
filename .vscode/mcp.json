@@ -1,51 +1,51 @@
-{
-  "servers": {
-    "weather": {
-      "command": "uv",
-      "args": ["--directory", "./weather-mcp", "run", "weather.py"]
-    },
-    "docker-weather": {
-      "command": "sudo",
-      "args": [
-        "docker",
-        "run",
-        "-i",
-        "--rm",
-        "--init",
-        "-e",
-        "DOCKER_CONTAINER=true",
-        "mcp-weather"
-      ]
-    },
-    "shell": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["--directory", "./shell-mcp", "run", "server.py"]
-    },
-    "docker-shell": {
-      "command": "sudo",
-      "args": [
-        "docker",
-        "run",
-        "-i",
-        "--rm",
-        "--init",
-        "-e",
-        "DOCKER_CONTAINER=true",
-        "shellserver-app"
-      ]
-    },
-    "research-prompt-mcp": {
-      "command": "uv",
-      "args": ["--directory", "./research-prompt", "run", "main.py"]
-    },
-    "todos": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp-auth0-oidc.sumeet-simform.workers.dev/mcp"
-      ],
-      "env": {}
-    }
-  }
-}
+// {
+//   "servers": {
+//     "weather": {
+//       "command": "uv",
+//       "args": ["--directory", "./weather-mcp", "run", "weather.py"]
+//     },
+//     "docker-weather": {
+//       "command": "sudo",
+//       "args": [
+//         "docker",
+//         "run",
+//         "-i",
+//         "--rm",
+//         "--init",
+//         "-e",
+//         "DOCKER_CONTAINER=true",
+//         "mcp-weather"
+//       ]
+//     },
+//     "shell": {
+//       "type": "stdio",
+//       "command": "uv",
+//       "args": ["--directory", "./shell-mcp", "run", "server.py"]
+//     },
+//     "docker-shell": {
+//       "command": "sudo",
+//       "args": [
+//         "docker",
+//         "run",
+//         "-i",
+//         "--rm",
+//         "--init",
+//         "-e",
+//         "DOCKER_CONTAINER=true",
+//         "shellserver-app"
+//       ]
+//     },
+//     "research-prompt-mcp": {
+//       "command": "uv",
+//       "args": ["--directory", "./research-prompt", "run", "main.py"]
+//     },
+//     "todos": {
+//       "command": "npx",
+//       "args": [
+//         "mcp-remote",
+//         "https://mcp-auth0-oidc.sumeet-simform.workers.dev/mcp"
+//       ],
+//       "env": {}
+//     }
+//   }
+// }
