@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
-import TodoCommandForm from '@/components/todo/TodoCommandForm'
+import TodoInput from '@/components/todo/TodoInput'
 import TodoList from '@/components/todo/TodoList'
+import CommandInput from '@/components/todo/CommandInput'
 import { TODO_QUERY_KEY, useTodoCommands } from '@/hooks/useTodoCommands'
 import type { Todo } from '@/types/todo'
 
@@ -9,14 +10,71 @@ export default function TodoPage() {
   const { mutate, isPending, isError, error } = useTodoCommands()
   const todos = queryClient.getQueryData<Todo[]>(TODO_QUERY_KEY) ?? []
 
+  const handleAddTodo = (command: string) => {
+    mutate(command)
+  }
+
+  const handleToggleComplete = (id: string) => {
+    mutate(`complete ${id}`)
+  }
+
+  const handleDelete = (id: string) => {
+    mutate(`delete ${id}`)
+  }
+
+  const handleUpdate = (id: string, newTask: string) => {
+    mutate(`update ${id} to ${newTask}`)
+  }
+
+  const handleCommand = (command: string) => {
+    mutate(command)
+  }
+
   return (
     <main className="min-h-screen bg-background p-6 text-primary">
-      <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-xl border border-primary p-6">
-        <h1 className="text-2xl font-semibold">Todos</h1>
-        <TodoCommandForm onSubmitCommand={(command) => mutate(command)} isLoading={isPending} />
-        {isError ? <p className="text-error">{error.message}</p> : null}
-        <TodoList todos={todos} />
-      </section>
+      <div className="mx-auto w-full max-w-2xl">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-primary">Todo App</h1>
+          <p className="mt-2 text-primary/60">Organize your tasks and stay productive</p>
+        </div>
+
+        {/* Main Card */}
+        <section className="rounded-lg border border-primary bg-background p-6 shadow-sm">
+          {/* Add Todo Input */}
+          <div className="mb-6">
+            <label className="mb-2 block text-sm font-medium text-primary">
+              Add a new task
+            </label>
+            <TodoInput onAddTodo={handleAddTodo} isLoading={isPending} />
+          </div>
+
+          {/* Error Message */}
+          {isError && (
+            <div className="mb-6 rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-600">
+              <p className="text-sm font-medium">Error:</p>
+              <p className="mt-1 text-sm">{error.message}</p>
+            </div>
+          )}
+
+          {/* Todos List */}
+          <div>
+            <label className="mb-3 block text-sm font-medium text-primary">
+              Your tasks ({todos.length})
+            </label>
+            <TodoList
+              todos={todos}
+              onToggleComplete={handleToggleComplete}
+              onDelete={handleDelete}
+              onUpdate={handleUpdate}
+              isLoading={isPending}
+            />
+          </div>
+        </section>
+
+        {/* Command Input (Advanced) */}
+        <CommandInput onSubmitCommand={handleCommand} isLoading={isPending} />
+      </div>
     </main>
   )
 }

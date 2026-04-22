@@ -19,6 +19,7 @@ const intentResultSchema = z.object({
 	args: z.object({
 		task: z.string().optional(),
 		id: z.string().optional(),
+		newTask: z.string().optional(),
 	}),
 });
 
@@ -49,25 +50,30 @@ const CLASSIFY_SYSTEM_PROMPT = `You are an intent classifier for a todo applicat
 Given user input, return a JSON object with:
 - "action": one of "add_todo", "list_todos", "complete_todo", "delete_todo", "update_todo"
 - "args": object with relevant fields:
-  - add_todo:     { "task": "<task text>" }
+  - add_todo:     { "task": "<task text to add>" }
   - list_todos:   {}
-  - complete_todo:{ "id": "<todo id>" }
-  - delete_todo:  { "id": "<todo id>" }
-  - update_todo:  { "id": "<todo id>", "task": "<new task text>" }
+  - complete_todo:{ "task": "<task text to find>" }
+  - delete_todo:  { "task": "<task text to find>" }
+  - update_todo:  { "task": "<task text to find>", "newTask": "<new task text>" }
+
+Note: For complete_todo and delete_todo, "task" is the text used to find the existing todo.
+For update_todo, "task" is the text used to find the existing todo, and "newTask" is the replacement text.
 
 Examples:
-"add buy milk"                        -> {"action":"add_todo","args":{"task":"buy milk"}}
-"list"                                -> {"action":"list_todos","args":{}}
-"remind me to call Alice"             -> {"action":"add_todo","args":{"task":"call Alice"}}
-"show all todos"                      -> {"action":"list_todos","args":{}}
-"complete abc-123"                    -> {"action":"complete_todo","args":{"id":"abc-123"}}
-"mark abc-123 as done"                -> {"action":"complete_todo","args":{"id":"abc-123"}}
-"delete abc-123"                      -> {"action":"delete_todo","args":{"id":"abc-123"}}
-"remove todo abc-123"                 -> {"action":"delete_todo","args":{"id":"abc-123"}}
-"update abc-123 to buy oat milk"      -> {"action":"update_todo","args":{"id":"abc-123","task":"buy oat milk"}}
-"change abc-123 task to buy oat milk" -> {"action":"update_todo","args":{"id":"abc-123","task":"buy oat milk"}}
+"add buy milk"                          -> {"action":"add_todo","args":{"task":"buy milk"}}
+"list"                                  -> {"action":"list_todos","args":{}}
+"remind me to call Alice"               -> {"action":"add_todo","args":{"task":"call Alice"}}
+"show all todos"                        -> {"action":"list_todos","args":{}}
+"complete buy milk"                     -> {"action":"complete_todo","args":{"task":"buy milk"}}
+"mark buy milk as done"                 -> {"action":"complete_todo","args":{"task":"buy milk"}}
+"delete buy milk"                       -> {"action":"delete_todo","args":{"task":"buy milk"}}
+"remove todo buy milk"                  -> {"action":"delete_todo","args":{"task":"buy milk"}}
+"update buy milk to buy oat milk"       -> {"action":"update_todo","args":{"task":"buy milk","newTask":"buy oat milk"}}
+"change buy milk task to buy oat milk" -> {"action":"update_todo","args":{"task":"buy milk","newTask":"buy oat milk"}}
 
 Respond with ONLY valid JSON, no explanation.`;
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function classifyIntentFallback(input: string): IntentResult {
 	const normalized = input.trim();
@@ -82,40 +88,52 @@ function classifyIntentFallback(input: string): IntentResult {
 	}
 
 	if (lowered.startsWith("complete ")) {
-		return { action: "complete_todo", args: { id: normalized.slice(9).trim() } };
+		const value = normalized.slice(9).trim();
+		return UUID_REGEX.test(value)
+			? { action: "complete_todo", args: { id: value } }
+			: { action: "complete_todo", args: { task: value } };
 	}
 
 	if (lowered.startsWith("mark ")) {
 		const afterMark = normalized.slice(5).trim();
-		const id = afterMark.replace(/\s+as\s+done$/i, "").trim();
-		return { action: "complete_todo", args: { id } };
+		const value = afterMark.replace(/\s+as\s+done$/i, "").trim();
+		return UUID_REGEX.test(value)
+			? { action: "complete_todo", args: { id: value } }
+			: { action: "complete_todo", args: { task: value } };
 	}
 
 	if (lowered.startsWith("delete ")) {
-		return { action: "delete_todo", args: { id: normalized.slice(7).trim() } };
+		const value = normalized.slice(7).trim();
+		return UUID_REGEX.test(value)
+			? { action: "delete_todo", args: { id: value } }
+			: { action: "delete_todo", args: { task: value } };
 	}
 
 	if (lowered.startsWith("remove ")) {
-		const id = normalized.slice(7).replace(/^todo\s+/i, "").trim();
-		return { action: "delete_todo", args: { id } };
+		const value = normalized.slice(7).replace(/^todo\s+/i, "").trim();
+		return UUID_REGEX.test(value)
+			? { action: "delete_todo", args: { id: value } }
+			: { action: "delete_todo", args: { task: value } };
 	}
 
 	if (lowered.startsWith("update ")) {
 		const payload = normalized.slice(7).trim();
-		const [idPart, ...taskParts] = payload.split(/\s+to\s+/i);
-		return {
-			action: "update_todo",
-			args: { id: idPart?.trim(), task: taskParts.join(" to ").trim() },
-		};
+		const [searchPart, ...newTaskParts] = payload.split(/\s+to\s+/i);
+		const searchValue = searchPart?.trim() ?? "";
+		const newTask = newTaskParts.join(" to ").trim();
+		return UUID_REGEX.test(searchValue)
+			? { action: "update_todo", args: { id: searchValue, newTask } }
+			: { action: "update_todo", args: { task: searchValue, newTask } };
 	}
 
 	if (lowered.startsWith("change ")) {
 		const payload = normalized.slice(7).trim();
-		const [idPart, ...taskParts] = payload.split(/\s+task\s+to\s+/i);
-		return {
-			action: "update_todo",
-			args: { id: idPart?.trim(), task: taskParts.join(" task to ").trim() },
-		};
+		const [searchPart, ...newTaskParts] = payload.split(/\s+task\s+to\s+/i);
+		const searchValue = searchPart?.trim() ?? "";
+		const newTask = newTaskParts.join(" task to ").trim();
+		return UUID_REGEX.test(searchValue)
+			? { action: "update_todo", args: { id: searchValue, newTask } }
+			: { action: "update_todo", args: { task: searchValue, newTask } };
 	}
 
 	return { action: "add_todo", args: { task: normalized } };
@@ -180,6 +198,30 @@ async function handleListTodos(): Promise<Todo[]> {
 	return tools.listTodos();
 }
 
+// Resolve a todo id from either a direct id or task text
+async function resolveId(args: { id?: string; task?: string }): Promise<string> {
+	if (args.id) return args.id;
+
+	const searchText = args.task?.trim().toLowerCase();
+	if (!searchText) throw new Error("No id or task text provided to identify the todo");
+
+	const allTodos = await tools.listTodos();
+	const matches = allTodos.filter((t) => t.task.trim().toLowerCase() === searchText);
+
+	if (matches.length === 0) {
+		throw new Error(`Todo not found: "${args.task}"`);
+	}
+
+	if (matches.length > 1) {
+		const list = matches.map((t) => `  - id: ${t.id} | task: ${t.task}`).join("\n");
+		throw new Error(
+			`Multiple todos match "${args.task}". Please be more specific or use the id:\n${list}`,
+		);
+	}
+
+	return matches[0].id;
+}
+
 async function handleUserInput(
 	input: string,
 	executors: TodoToolExecutors,
@@ -194,22 +236,19 @@ async function handleUserInput(
 	let result: WorkflowToolResult;
 	if (intent.action === "add_todo") {
 		const task = intent.args.task?.trim();
-		if (!task) throw new Error("LLM did not extract a task for add_todo");
+		if (!task) throw new Error("Could not extract a task for add_todo");
 		result = await executors.add_todo({ task });
 	} else if (intent.action === "complete_todo") {
-		const id = intent.args.id?.trim();
-		if (!id) throw new Error("LLM did not extract an id for complete_todo");
+		const id = await resolveId(intent.args);
 		result = await executors.complete_todo({ id });
 	} else if (intent.action === "delete_todo") {
-		const id = intent.args.id?.trim();
-		if (!id) throw new Error("LLM did not extract an id for delete_todo");
+		const id = await resolveId(intent.args);
 		result = await executors.delete_todo({ id });
 	} else if (intent.action === "update_todo") {
-		const id = intent.args.id?.trim();
-		const task = intent.args.task?.trim();
-		if (!id) throw new Error("LLM did not extract an id for update_todo");
-		if (!task) throw new Error("LLM did not extract a task for update_todo");
-		result = await executors.update_todo({ id, task });
+		const id = await resolveId(intent.args);
+		const newTask = intent.args.newTask?.trim();
+		if (!newTask) throw new Error("Could not extract new task text for update_todo");
+		result = await executors.update_todo({ id, task: newTask });
 	} else {
 		result = await executors.list_todos();
 	}
