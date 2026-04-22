@@ -69,12 +69,64 @@ Examples:
 
 Respond with ONLY valid JSON, no explanation.`;
 
+function classifyIntentFallback(input: string): IntentResult {
+	const normalized = input.trim();
+	const lowered = normalized.toLowerCase();
+
+	if (lowered === "list" || lowered === "list todos" || lowered.startsWith("show")) {
+		return { action: "list_todos", args: {} };
+	}
+
+	if (lowered.startsWith("add ")) {
+		return { action: "add_todo", args: { task: normalized.slice(4).trim() } };
+	}
+
+	if (lowered.startsWith("complete ")) {
+		return { action: "complete_todo", args: { id: normalized.slice(9).trim() } };
+	}
+
+	if (lowered.startsWith("mark ")) {
+		const afterMark = normalized.slice(5).trim();
+		const id = afterMark.replace(/\s+as\s+done$/i, "").trim();
+		return { action: "complete_todo", args: { id } };
+	}
+
+	if (lowered.startsWith("delete ")) {
+		return { action: "delete_todo", args: { id: normalized.slice(7).trim() } };
+	}
+
+	if (lowered.startsWith("remove ")) {
+		const id = normalized.slice(7).replace(/^todo\s+/i, "").trim();
+		return { action: "delete_todo", args: { id } };
+	}
+
+	if (lowered.startsWith("update ")) {
+		const payload = normalized.slice(7).trim();
+		const [idPart, ...taskParts] = payload.split(/\s+to\s+/i);
+		return {
+			action: "update_todo",
+			args: { id: idPart?.trim(), task: taskParts.join(" to ").trim() },
+		};
+	}
+
+	if (lowered.startsWith("change ")) {
+		const payload = normalized.slice(7).trim();
+		const [idPart, ...taskParts] = payload.split(/\s+task\s+to\s+/i);
+		return {
+			action: "update_todo",
+			args: { id: idPart?.trim(), task: taskParts.join(" task to ").trim() },
+		};
+	}
+
+	return { action: "add_todo", args: { task: normalized } };
+}
+
 async function classifyIntent(input: string): Promise<IntentResult> {
 	const apiKey = process.env.ANTHROPIC_API_KEY;
 	if (!apiKey) {
-		throw new Error(
-			"ANTHROPIC_API_KEY is required for LLM-based intent classification",
-		);
+		const fallbackIntent = classifyIntentFallback(input);
+		log("classified intent (fallback)", fallbackIntent);
+		return fallbackIntent;
 	}
 
 	const model = process.env.ANTHROPIC_MODEL ?? "claude-3-5-haiku-20241022";
@@ -96,17 +148,27 @@ async function classifyIntent(input: string): Promise<IntentResult> {
 
 	if (!response.ok) {
 		const body = await response.text();
-		throw new Error(`Anthropic API error ${response.status}: ${body}`);
+		log(`anthropic API error ${response.status}, using fallback`, body);
+		const fallbackIntent = classifyIntentFallback(input);
+		log("classified intent (fallback)", fallbackIntent);
+		return fallbackIntent;
 	}
 
 	const data = (await response.json()) as {
 		content: Array<{ type: string; text: string }>;
 	};
 
-	const text = data.content.find((c) => c.type === "text")?.text ?? "";
-	const intent = intentResultSchema.parse(JSON.parse(text));
-	log("classified intent", intent);
-	return intent;
+	try {
+		const text = data.content.find((c) => c.type === "text")?.text ?? "";
+		const intent = intentResultSchema.parse(JSON.parse(text));
+		log("classified intent", intent);
+		return intent;
+	} catch (error) {
+		log("invalid LLM response, using fallback", error);
+		const fallbackIntent = classifyIntentFallback(input);
+		log("classified intent (fallback)", fallbackIntent);
+		return fallbackIntent;
+	}
 }
 
 async function handleAddTodo(input: AddTodoParams): Promise<Todo> {
