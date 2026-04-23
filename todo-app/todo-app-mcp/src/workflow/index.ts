@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { tools } from "../tools/index.js";
-import type { AddTodoParams, Todo } from "../types/index.js";
+import type { AddTodoParams, AppBindings, Todo } from "../types/index.js";
 
 const log = (msg: string, data?: unknown) =>
 	console.error(`[workflow] ${msg}`, data !== undefined ? data : "");
@@ -139,23 +139,26 @@ async function classifyIntent(input: string): Promise<IntentResult> {
 	return intent;
 }
 
-async function handleAddTodo(input: AddTodoParams): Promise<Todo> {
+async function handleAddTodo(
+	env: AppBindings,
+	input: AddTodoParams,
+): Promise<Todo> {
 	const params: AddTodoParams = { task: input.task.trim() };
-	return tools.addTodo(params);
+	return tools.addTodo(env, params);
 }
 
-async function handleListTodos(): Promise<Todo[]> {
-	return tools.listTodos();
+async function handleListTodos(env: AppBindings): Promise<Todo[]> {
+	return tools.listTodos(env);
 }
 
 // Resolve a todo id from either a direct id or task text
-async function resolveId(args: { id?: string; task?: string }): Promise<string> {
+async function resolveId(env: AppBindings, args: { id?: string; task?: string }): Promise<string> {
 	if (args.id) return args.id;
 
 	const searchText = args.task?.trim().toLowerCase();
 	if (!searchText) throw new Error("No id or task text provided to identify the todo");
 
-	const allTodos = await tools.listTodos();
+	const allTodos = await tools.listTodos(env);
 	const matches = allTodos.filter((t) => t.task.trim().toLowerCase() === searchText);
 
 	if (matches.length === 0) {
@@ -173,6 +176,7 @@ async function resolveId(args: { id?: string; task?: string }): Promise<string> 
 }
 
 async function handleUserInput(
+	env: AppBindings,
 	input: string,
 	executors: TodoToolExecutors,
 ): Promise<WorkflowResult> {
@@ -189,13 +193,13 @@ async function handleUserInput(
 		if (!task) throw new Error("Could not extract a task for add_todo");
 		result = await executors.add_todo({ task });
 	} else if (intent.action === "complete_todo") {
-		const id = await resolveId(intent.args);
+		const id = await resolveId(env, intent.args);
 		result = await executors.complete_todo({ id });
 	} else if (intent.action === "delete_todo") {
-		const id = await resolveId(intent.args);
+		const id = await resolveId(env, intent.args);
 		result = await executors.delete_todo({ id });
 	} else if (intent.action === "update_todo") {
-		const id = await resolveId(intent.args);
+		const id = await resolveId(env, intent.args);
 		const newTask = intent.args.newTask?.trim();
 		if (!newTask) throw new Error("Could not extract new task text for update_todo");
 		result = await executors.update_todo({ id, task: newTask });

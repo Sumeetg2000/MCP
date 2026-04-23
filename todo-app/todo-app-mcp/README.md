@@ -7,7 +7,7 @@ A TypeScript MCP (Model Context Protocol) backend for todo management, running o
 - Worker entrypoint: `src/server.ts`
 - Framework: Hono
 - MCP transport: `WebStandardStreamableHTTPServerTransport` in stateless mode
-- Todo state: in-memory module state in `src/tools/index.ts`
+- Todo state: persisted as a JSON blob in Cloudflare KV via `TODO_STORE`
 
 ## Project Structure
 
@@ -55,6 +55,8 @@ Text-based commands (for example, "delete buy milk") are resolved to todo IDs by
 
 Completion commands toggle the todo state. Commands such as "complete buy milk", "toggle buy milk", "unmark buy milk", and "mark buy milk as not done" all route through the workflow layer and flip the current `completed` value.
 
+Todos are loaded from KV on first use in each worker instance and written back after every change.
+
 ## Development
 
 From `todo-app/todo-app-mcp`:
@@ -70,6 +72,8 @@ npm run dev
 ```bash
 npm run deploy
 ```
+
+Before deploying, create a KV namespace and replace the placeholder `id` and `preview_id` values in `wrangler.jsonc`.
 
 ## MCP Inspector
 

@@ -12,6 +12,10 @@ export interface Todo {
   createdAt: string;
 }
 
+export interface AppBindings {
+  TODO_STORE: KVNamespace;
+}
+
 /**
  * Parameters for adding a todo
  */

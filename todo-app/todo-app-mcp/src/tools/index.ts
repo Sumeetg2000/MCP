@@ -1,15 +1,32 @@
 /**
  * MCP Tools Module
  *
- * Low-level todo operations with input validation.
+ * Low-level todo operations with persistence.
  * Each tool is independent and focused on a single operation.
  */
 
-import type { AddTodoParams, Todo, UpdateTodoParams } from "../types/index.js";
+import type { AddTodoParams, AppBindings, Todo, UpdateTodoParams } from "../types/index.js";
 
-const todos: Todo[] = [];
+const TODO_STORAGE_KEY = "todos";
+let todosCache: Todo[] | null = null;
 
-async function addTodo(params: AddTodoParams): Promise<Todo> {
+async function loadTodos(env: AppBindings): Promise<Todo[]> {
+	if (todosCache) {
+		return todosCache;
+	}
+
+	const storedTodos = await env.TODO_STORE.get<Todo[]>(TODO_STORAGE_KEY, "json");
+	todosCache = Array.isArray(storedTodos) ? storedTodos : [];
+	return todosCache;
+}
+
+async function saveTodos(env: AppBindings, todos: Todo[]): Promise<void> {
+	todosCache = todos;
+	await env.TODO_STORE.put(TODO_STORAGE_KEY, JSON.stringify(todos));
+}
+
+async function addTodo(env: AppBindings, params: AddTodoParams): Promise<Todo> {
+	const todos = await loadTodos(env);
 	const todo: Todo = {
 		id: crypto.randomUUID(),
 		task: params.task,
@@ -18,31 +35,39 @@ async function addTodo(params: AddTodoParams): Promise<Todo> {
 	};
 
 	todos.push(todo);
+	await saveTodos(env, todos);
 	return todo;
 }
 
-async function listTodos(): Promise<Todo[]> {
+async function listTodos(env: AppBindings): Promise<Todo[]> {
+	const todos = await loadTodos(env);
 	return [...todos];
 }
 
-async function completeTodo(id: string): Promise<Todo> {
+async function completeTodo(env: AppBindings, id: string): Promise<Todo> {
+	const todos = await loadTodos(env);
 	const todo = todos.find((t) => t.id === id);
 	if (!todo) throw new Error(`Todo not found: ${id}`);
 	todo.completed = !todo.completed;
+	await saveTodos(env, todos);
 	return { ...todo };
 }
 
-async function deleteTodo(id: string): Promise<{ id: string }> {
+async function deleteTodo(env: AppBindings, id: string): Promise<{ id: string }> {
+	const todos = await loadTodos(env);
 	const index = todos.findIndex((t) => t.id === id);
 	if (index === -1) throw new Error(`Todo not found: ${id}`);
 	todos.splice(index, 1);
+	await saveTodos(env, todos);
 	return { id };
 }
 
-async function updateTodo(params: UpdateTodoParams): Promise<Todo> {
+async function updateTodo(env: AppBindings, params: UpdateTodoParams): Promise<Todo> {
+	const todos = await loadTodos(env);
 	const todo = todos.find((t) => t.id === params.id);
 	if (!todo) throw new Error(`Todo not found: ${params.id}`);
 	todo.task = params.task;
+	await saveTodos(env, todos);
 	return { ...todo };
 }
 

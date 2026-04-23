@@ -2,5 +2,12 @@
   "name": "todo-app-mcp",
   "main": "src/server.ts",
   "compatibility_date": "2026-04-01",
-  "compatibility_flags": ["global_fetch_strictly_public"]
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "kv_namespaces": [
+    {
+      "binding": "TODO_STORE",
+      "id": "<binding_ID>",
+      "preview_id": "<local_binding_ID>"
+    }
+  ]
 }
