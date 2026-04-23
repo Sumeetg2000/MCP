@@ -28,7 +28,7 @@ async function listTodos(): Promise<Todo[]> {
 async function completeTodo(id: string): Promise<Todo> {
 	const todo = todos.find((t) => t.id === id);
 	if (!todo) throw new Error(`Todo not found: ${id}`);
-	todo.completed = true;
+	todo.completed = !todo.completed;
 	return { ...todo };
 }
 

@@ -1,6 +1,7 @@
-import express, { type Request, type Response } from "express";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { workflows } from "./workflow/index.js";
 import { tools } from "./tools/index.js";
@@ -72,7 +73,12 @@ async function executeCompleteTodo(args: unknown): Promise<ToolResult> {
   log("complete_todo", { id });
   const todo = await tools.completeTodo(id);
   return {
-    content: [{ type: "text", text: `Completed todo: ${todo.task}` }],
+    content: [
+      {
+        type: "text",
+        text: `${todo.completed ? "Completed" : "Unmarked"} todo: ${todo.task}`,
+      },
+    ],
     structuredContent: { todo },
   };
 }
@@ -126,7 +132,7 @@ const toolDefinitions = {
     execute: async () => executeListTodos(),
   },
   complete_todo: {
-    description: "Mark a todo as completed by id",
+    description: "Toggle a todo between completed and not completed by id",
     inputSchema: idInputSchema,
     execute: executeCompleteTodo,
   },
@@ -189,113 +195,52 @@ function createMcpServer(): McpServer {
   return server;
 }
 
-async function main(): Promise<void> {
-  const app = express();
-  app.use(express.json());
-  app.use((_, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-    next();
-  });
+const app = new Hono();
 
-  app.options("*", (_req, res) => {
-    res.sendStatus(204);
-  });
+app.use(
+  "*",
+  cors({
+    origin: "*",
+    allowHeaders: ["Content-Type", "MCP-Protocol-Version"],
+    allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
+  }),
+);
 
-  app.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
-  });
-
-  // Frontend-friendly endpoint. Accepts command input and always returns current todo list.
-  app.post("/ai", async (req: Request, res: Response) => {
-    try {
-      const { input } = workflowInputSchema.parse(req.body ?? {});
-      await workflows.handleUserInput(input, createWorkflowExecutors());
-      const todos = await workflows.handleListTodos();
-      res.json({ todos });
-    } catch (error) {
-      res.status(400).json({
-        error: error instanceof Error ? error.message : "Invalid request",
-      });
-    }
-  });
-
-  // Simple workflow endpoint for plain user input.
-  // Delegates to workflow layer (LLM classifier), which then invokes MCP tool executors.
-  // Returns structured output: { success, action, args, result }
-  app.post("/workflow", async (req: Request, res: Response) => {
-    try {
-      const { input } = workflowInputSchema.parse(req.body ?? {});
-      const { action, args, result } = await workflows.handleUserInput(
-        input,
-        createWorkflowExecutors(),
-      );
-      res.json({ success: true, action, args, result });
-    } catch (error) {
-      res.status(400).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Invalid request",
-      });
-    }
-  });
-
-  // MCP Streamable HTTP — handles both regular POST calls and SSE streaming.
-  // Compatible with MCP Inspector and any MCP-spec client.
-  app.post("/mcp", async (req: Request, res: Response) => {
-    const server = createMcpServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined, // stateless: no session persistence needed
-    });
-
-    try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
-      res.on("close", () => transport.close());
-    } catch (error) {
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: error instanceof Error ? error.message : "Server error",
-        });
-      }
-    }
-  });
-
-  // GET /mcp — required by MCP spec for SSE-based streaming responses
-  app.get("/mcp", async (req: Request, res: Response) => {
-    const server = createMcpServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-    });
-
-    try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res);
-    } catch (error) {
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: error instanceof Error ? error.message : "Server error",
-        });
-      }
-    }
-  });
-
-  // DELETE /mcp — required to respond correctly per MCP spec
-  app.delete("/mcp", (_req: Request, res: Response) => {
-    res.status(405).json({ error: "Method not allowed" });
-  });
-
-  const port = Number(process.env.PORT ?? 3000);
-  app.listen(port, () => {
-    console.error(`MCP server listening on http://localhost:${port}/mcp`);
-  });
-
-  process.on("SIGINT", () => {
-    process.exit(0);
-  });
-}
-
-main().catch((error) => {
-  console.error("Fatal server error:", error);
-  process.exit(1);
+app.get("/health", (c) => {
+  return c.json({ status: "ok" });
 });
+
+// Frontend-friendly endpoint. Accepts command input and always returns current todo list.
+app.post("/ai", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { input } = workflowInputSchema.parse(body ?? {});
+    await workflows.handleUserInput(input, createWorkflowExecutors());
+    const todos = await workflows.handleListTodos();
+    return c.json({ todos });
+  } catch (error) {
+    return c.json(
+      { error: error instanceof Error ? error.message : "Invalid request" },
+      400,
+    );
+  }
+});
+
+app.all("/mcp", async (c) => {
+  const server = createMcpServer();
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined, // stateless: no session persistence needed
+  });
+
+  try {
+    await server.connect(transport);
+    return await transport.handleRequest(c.req.raw);
+  } catch (error) {
+    return c.json(
+      { error: error instanceof Error ? error.message : "Server error" },
+      500,
+    );
+  }
+});
+
+export default app;
