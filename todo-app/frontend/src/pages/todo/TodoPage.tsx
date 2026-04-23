@@ -1,14 +1,20 @@
-import { useQueryClient } from '@tanstack/react-query'
 import TodoInput from '@/components/todo/TodoInput'
 import TodoList from '@/components/todo/TodoList'
 import CommandInput from '@/components/todo/CommandInput'
-import { TODO_QUERY_KEY, useTodoCommands } from '@/hooks/useTodoCommands'
-import type { Todo } from '@/types/todo'
+import { useTodoCommands, useTodosQuery } from '@/hooks/useTodoCommands'
 
 export default function TodoPage() {
-  const queryClient = useQueryClient()
-  const { mutate, isPending, isError, error } = useTodoCommands()
-  const todos = queryClient.getQueryData<Todo[]>(TODO_QUERY_KEY) ?? []
+  const {
+    data: todos = [],
+    isLoading: isInitialLoading,
+    isError: isInitialLoadError,
+    error: initialLoadError,
+  } = useTodosQuery()
+  const { mutate, isPending, isError: isCommandError, error: commandError } = useTodoCommands()
+
+  const isLoading = isInitialLoading || isPending
+  const errorMessage = (commandError ?? initialLoadError)?.message ?? 'Something went wrong'
+  const isError = isCommandError || isInitialLoadError
 
   const handleAddTodo = (command: string) => {
     mutate(command)
@@ -41,19 +47,25 @@ export default function TodoPage() {
 
         {/* Main Card */}
         <section className="rounded-lg border border-primary bg-background p-6 shadow-sm">
+          {isLoading && (
+            <div className="mb-6 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-primary">
+              {isInitialLoading ? 'Loading todos...' : 'Updating todos...'}
+            </div>
+          )}
+
           {/* Add Todo Input */}
           <div className="mb-6">
             <label className="mb-2 block text-sm font-medium text-primary">
               Add a new task
             </label>
-            <TodoInput onAddTodo={handleAddTodo} isLoading={isPending} />
+            <TodoInput onAddTodo={handleAddTodo} isLoading={isLoading} />
           </div>
 
           {/* Error Message */}
           {isError && (
             <div className="mb-6 rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-600">
-              <p className="text-sm font-medium">Error:</p>
-              <p className="mt-1 text-sm">{error.message}</p>
+              <p className="text-sm font-medium">Request failed</p>
+              <p className="mt-1 text-sm">{errorMessage}</p>
             </div>
           )}
 
@@ -67,13 +79,13 @@ export default function TodoPage() {
               onToggleComplete={handleToggleComplete}
               onDelete={handleDelete}
               onUpdate={handleUpdate}
-              isLoading={isPending}
+              isLoading={isLoading}
             />
           </div>
         </section>
 
         {/* Command Input (Advanced) */}
-        <CommandInput onSubmitCommand={handleCommand} isLoading={isPending} />
+        <CommandInput onSubmitCommand={handleCommand} isLoading={isLoading} />
       </div>
     </main>
   )
